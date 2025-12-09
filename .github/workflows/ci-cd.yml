@@ -75,15 +75,6 @@ jobs:
       - name: Install dependencies
         run: npm install
       
-      - name: Run tests
-        run: |
-          if [ -f "src/**/*.test.js" ] || [ -f "src/**/*.test.jsx" ] || [ -f "src/**/*.test.ts" ] || [ -f "src/**/*.test.tsx" ]; then
-            npm test -- --watchAll=false --passWithNoTests
-          else
-            echo "No test files found, skipping tests"
-          fi
-        continue-on-error: true
-      
       - name: Build
         run: npm run build
       
