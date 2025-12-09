@@ -88,12 +88,23 @@ jobs:
   deploy:
     needs: [backend-test, frontend-test]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.AWS_ACCESS_KEY_ID != ''
     
     steps:
       - uses: actions/checkout@v3
       
+      - name: Check AWS credentials
+        id: check-aws
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "AWS credentials not configured, skipping deployment"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Configure AWS credentials
+        if: steps.check-aws.outputs.skip == 'false'
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -101,22 +112,26 @@ jobs:
           aws-region: us-east-1
       
       - name: Login to Amazon ECR
+        if: steps.check-aws.outputs.skip == 'false'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
       
       - name: Build and push backend image
+        if: steps.check-aws.outputs.skip == 'false'
         working-directory: ./rental-management-backend
         run: |
           docker build -t ${{ steps.login-ecr.outputs.registry }}/rental-backend:${{ github.sha }} .
           docker push ${{ steps.login-ecr.outputs.registry }}/rental-backend:${{ github.sha }}
       
       - name: Build and push frontend image
+        if: steps.check-aws.outputs.skip == 'false'
         working-directory: ./rental-management-frontend
         run: |
           docker build -t ${{ steps.login-ecr.outputs.registry }}/rental-frontend:${{ github.sha }} .
           docker push ${{ steps.login-ecr.outputs.registry }}/rental-frontend:${{ github.sha }}
       
       - name: Deploy to EC2
+        if: steps.check-aws.outputs.skip == 'false'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -127,3 +142,7 @@ jobs:
             docker-compose pull
             docker-compose up -d
             docker-compose ps
+      
+      - name: Skip deployment message
+        if: steps.check-aws.outputs.skip == 'true'
+        run: echo "Deployment skipped: AWS credentials not configured"
